@@ -22,7 +22,7 @@ tools/                                                # Python utilities (TTS, e
 
 A virtual environment is at `venv/`. Run Python tools via:
 ```
-/home/efi0ng/src/language_tutor/venv/bin/python tools/tts.py ...
+venv/bin/python tools/tts.py ...
 ```
 
 ## Tools
