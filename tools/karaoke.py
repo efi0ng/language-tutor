@@ -17,7 +17,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -32,15 +31,16 @@ BG_COLOR       = (15, 18, 28)       # deep navy background
 COLOR_PAST     = (80, 85, 100)      # dim gray  – already spoken
 COLOR_FUTURE   = (190, 195, 210)    # light gray – not yet spoken
 COLOR_CURRENT  = (255, 215, 0)      # gold      – currently spoken
-COLOR_TITLE    = (140, 170, 220)    # blue-ish  – story title
+COLOR_TITLE    = (140, 170, 220)    # blue-ish  – title (future state)
 COLOR_PROGRESS = (255, 215, 0)      # progress bar
 
 FONT_SIZE       = 54
-TITLE_FONT_SIZE = 32
-LINE_SPACING    = 1.55      # multiplier on font height
-H_PADDING       = 100       # horizontal padding
-V_TOP           = 75        # y-start for title
-TITLE_GAP       = 50        # gap between title and body text
+TITLE_FONT_SIZE = 62                # title is slightly larger than body
+LINE_SPACING    = 1.55              # multiplier on font height
+TITLE_POST_GAP  = 50               # extra pixels below title before story text
+H_PADDING       = 100              # horizontal padding
+SCROLL_PAD      = 40               # top/bottom padding for the scroll viewport
+PROGRESS_H      = 28               # height reserved at bottom for progress bar
 
 FONT_PATH = Path(__file__).parent / "NotoSansSC-Regular.ttf"
 
@@ -77,6 +77,42 @@ def wrap_line(line: str, font, max_width: int, draw) -> list[str]:
     if current:
         segments.append(current)
     return segments
+
+
+def compute_layout(all_lines, font, title_font, draw_ref):
+    """
+    Compute the scroll layout for all lines (title + story).
+
+    Returns a list of segment dicts:
+        { li, seg, offset, y_abs, seg_font, fh }
+
+    all_lines[0] is the title; all_lines[1:] are story lines.
+    The title gets TITLE_POST_GAP extra space below it.
+    """
+    available_w = WIDTH - 2 * H_PADDING
+    body_fh  = draw_ref.textbbox((0, 0), "字", font=font)[3]
+    title_fh = draw_ref.textbbox((0, 0), "字", font=title_font)[3]
+
+    items = []
+    y = 0
+    for li, line in enumerate(all_lines):
+        is_title = (li == 0)
+        seg_font = title_font if is_title else font
+        fh       = title_fh  if is_title else body_fh
+        lh       = int(fh * LINE_SPACING)
+
+        segs = wrap_line(line, seg_font, available_w, draw_ref)
+        offset = 0
+        for seg_i, seg in enumerate(segs):
+            items.append(dict(li=li, seg=seg, offset=offset,
+                              y_abs=y, seg_font=seg_font, fh=fh))
+            offset += len(seg)
+            y += lh
+            # Extra gap after the last segment of the title line
+            if is_title and seg_i == len(segs) - 1:
+                y += TITLE_POST_GAP
+
+    return items
 
 
 # ── Audio helpers ─────────────────────────────────────────────────────────────
@@ -117,17 +153,18 @@ def is_notable(ch: str) -> bool:
     return is_zh(ch) or ch in "，。！？：""''（）、「」…—"
 
 
-def build_timeline(narrative_lines: list[str], whisper_words: list[dict]):
+def build_timeline(all_lines: list[str], whisper_words: list[dict]):
     """
     Build a list of token dicts:
         { char, global_idx, line_idx, char_idx, start, end }
 
-    Only Chinese characters are timed (punctuation inherits the previous char's end).
-    This gives good-enough karaoke sync without over-engineering.
+    all_lines[0] is the title; the title characters should appear in the
+    Whisper output first (since the narration announces the title before
+    the story body).
     """
     # Flatten all chars with their position info
     flat = []   # (char, line_idx, char_idx_in_line, global_idx)
-    for li, line in enumerate(narrative_lines):
+    for li, line in enumerate(all_lines):
         for ci, ch in enumerate(line):
             flat.append((ch, li, ci, len(flat)))
 
@@ -150,11 +187,9 @@ def build_timeline(narrative_lines: list[str], whisper_words: list[dict]):
 
     for ch, li, ci, gi in our_zh:
         if wi >= len(wh_chars):
-            # Extrapolate beyond Whisper output
             last = list(zh_times.values())[-1] if zh_times else (0, 0)
             zh_times[gi] = (last[1], last[1] + 0.25)
             continue
-        # Allow small lookahead to skip mismatches
         matched = False
         for ahead in range(min(6, len(wh_chars) - wi)):
             if wh_chars[wi + ahead][0] == ch:
@@ -164,12 +199,11 @@ def build_timeline(narrative_lines: list[str], whisper_words: list[dict]):
                 matched = True
                 break
         if not matched:
-            # Force-assign current whisper char and advance
             _, t0, t1 = wh_chars[wi]
             zh_times[gi] = (t0, t1)
             wi += 1
 
-    # Now build the final token list for all notable chars
+    # Build the final token list for all notable chars
     tokens = []
     last_end = 0.0
     for ch, li, ci, gi in flat:
@@ -179,7 +213,6 @@ def build_timeline(narrative_lines: list[str], whisper_words: list[dict]):
             t0, t1 = zh_times[gi]
             last_end = t1
         else:
-            # Punctuation: sits at last_end with tiny duration
             t0, t1 = last_end, last_end + 0.05
         tokens.append(dict(char=ch, line_idx=li, char_idx=ci,
                            global_idx=gi, start=t0, end=t1))
@@ -211,79 +244,66 @@ def char_status(tokens, current_idx: int):
     return s
 
 
-def render_frame(
-    narrative_lines, tokens, current_idx, t,
-    font, title_font, title,
-    camera_y,           # current scroll offset (pixels from top of text block)
-    font_height,
-):
-    img = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
+def render_frame(all_lines, tokens, current_idx, t, font, title_font,
+                 layout, camera_y):
+    """Render a single karaoke frame."""
+    img  = Image.new("RGB", (WIDTH, HEIGHT), BG_COLOR)
     draw = ImageDraw.Draw(img)
 
-    # Title
-    tw = draw.textbbox((0, 0), title, font=title_font)[2]
-    draw.text(((WIDTH - tw) / 2, V_TOP), title, font=title_font, fill=COLOR_TITLE)
+    viewport_top    = SCROLL_PAD
+    viewport_bottom = HEIGHT - PROGRESS_H
+    viewport_h      = viewport_bottom - viewport_top
 
-    body_top = V_TOP + TITLE_FONT_SIZE + TITLE_GAP
-    body_height = HEIGHT - body_top - 40  # 40px for progress bar area
-    available_w = WIDTH - 2 * H_PADDING
-
-    line_h = int(font_height * LINE_SPACING)
     statuses = char_status(tokens, current_idx)
 
-    # Wrap all lines (deterministic, same each frame)
-    wrapped = []   # list of (line_idx, segment_text, char_offset_in_orig_line)
-    for li, line in enumerate(narrative_lines):
-        segs = wrap_line(line, font, available_w, draw)
-        offset = 0
-        for seg in segs:
-            wrapped.append((li, seg, offset))
-            offset += len(seg)
+    for item in layout:
+        li, seg, offset = item["li"], item["seg"], item["offset"]
+        y_abs = item["y_abs"]
+        seg_font = item["seg_font"]
+        fh = item["fh"]
 
-    # Clip / scroll: draw relative to camera_y
-    for seg_idx, (li, seg, offset) in enumerate(wrapped):
-        y_abs = seg_idx * line_h          # absolute y in the text block
-        y_screen = body_top + y_abs - camera_y
+        y_screen = viewport_top + y_abs - camera_y
 
-        # Cull lines outside the viewport
-        if y_screen + line_h < body_top or y_screen > body_top + body_height:
+        # Cull segments outside the viewport
+        if y_screen + fh < viewport_top or y_screen > viewport_bottom:
             continue
 
-        # Measure total segment width for centering
-        seg_w = sum(draw.textbbox((0, 0), c, font=font)[2] for c in seg)
+        # Centre the segment horizontally
+        seg_w = sum(draw.textbbox((0, 0), c, font=seg_font)[2] for c in seg)
         x = (WIDTH - seg_w) // 2
 
         for ci_local, ch in enumerate(seg):
             ci_orig = offset + ci_local
-            status = statuses.get((li, ci_orig), "future")
-
-            cw = draw.textbbox((0, 0), ch, font=font)[2]
+            status  = statuses.get((li, ci_orig), "future")
+            cw      = draw.textbbox((0, 0), ch, font=seg_font)[2]
 
             if status == "current":
-                # Highlight glow background
                 pad = 4
                 draw.rounded_rectangle(
-                    [x - pad, y_screen - pad, x + cw + pad, y_screen + font_height + pad],
+                    [x - pad, y_screen - pad,
+                     x + cw + pad, y_screen + fh + pad],
                     radius=6, fill=(60, 50, 10)
                 )
                 color = COLOR_CURRENT
             elif status == "past":
                 color = COLOR_PAST
             else:
-                color = COLOR_FUTURE
+                # future: title uses its own colour, body uses standard future colour
+                color = COLOR_TITLE if li == 0 else COLOR_FUTURE
 
-            draw.text((x, y_screen), ch, font=font, fill=color)
+            draw.text((x, y_screen), ch, font=seg_font, fill=color)
             x += cw
 
     # Progress bar
     if tokens:
-        end_t = tokens[-1]["end"]
+        end_t    = tokens[-1]["end"]
         progress = min(1.0, t / end_t) if end_t > 0 else 0
-        bar_y = HEIGHT - 20
-        bh = 5
+        bar_y    = HEIGHT - 16
+        bh       = 5
         bx0, bx1 = H_PADDING, WIDTH - H_PADDING
         draw.rectangle([bx0, bar_y, bx1, bar_y + bh], fill=(35, 38, 50))
-        draw.rectangle([bx0, bar_y, bx0 + int((bx1 - bx0) * progress), bar_y + bh],
+        draw.rectangle([bx0, bar_y,
+                        bx0 + int((bx1 - bx0) * progress), bar_y + bh],
                        fill=COLOR_PROGRESS)
 
     return img
@@ -291,47 +311,41 @@ def render_frame(
 
 # ── Target camera position ────────────────────────────────────────────────────
 
-def target_camera_y(
-    narrative_lines, tokens, current_idx,
-    font, font_height, draw_ref,
-    body_top, body_height,
-):
-    """Y-offset (in text-block pixels) that centres the current line on screen."""
+def target_camera_y(tokens, current_idx, layout, viewport_h):
+    """Y-offset that centres the current token's line in the viewport."""
     if current_idx < 0:
         return 0.0
 
-    available_w = WIDTH - 2 * H_PADDING
-    line_h = int(font_height * LINE_SPACING)
-
-    wrapped = []
-    for li, line in enumerate(narrative_lines):
-        segs = wrap_line(line, font, available_w, draw_ref)
-        wrapped.extend(li for _ in segs)
-
     cur_li = tokens[current_idx]["line_idx"]
 
-    # Find which wrapped segment index corresponds to current line
-    for seg_i, li in enumerate(wrapped):
-        if li == cur_li:
-            seg_y = seg_i * line_h
-            # Centre this line in the body area
-            target = seg_y - (body_height // 2) + (line_h // 2)
-            total_h = len(wrapped) * line_h
-            max_scroll = max(0, total_h - body_height)
-            return max(0.0, min(float(target), float(max_scroll)))
+    # Find the first layout segment belonging to cur_li
+    for item in layout:
+        if item["li"] == cur_li:
+            seg_y = item["y_abs"]
+            fh    = item["fh"]
+            lh    = int(fh * LINE_SPACING)
+            target = seg_y - (viewport_h // 2) + (lh // 2)
+            if layout:
+                last = layout[-1]
+                total_h = last["y_abs"] + int(last["fh"] * LINE_SPACING)
+                max_scroll = max(0, total_h - viewport_h)
+                return max(0.0, min(float(target), float(max_scroll)))
+            return max(0.0, float(target))
 
     return 0.0
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def generate(story_path, audio_path, output_path, model_name="base"):
+def generate(story_path, audio_path, output_path, model_name="small"):
     story_path  = Path(story_path)
     audio_path  = Path(audio_path)
     output_path = Path(output_path)
 
     print("── Extracting narrative…")
     title, narrative_lines = extract_narrative(story_path)
+    all_lines = [title] + narrative_lines
+    print(f"  Title: {title}")
     for l in narrative_lines:
         print(f"  {l}")
 
@@ -344,20 +358,21 @@ def generate(story_path, audio_path, output_path, model_name="base"):
     print(f"  Got {len(wh_words)} Whisper tokens")
 
     print("── Building karaoke timeline…")
-    tokens = build_timeline(narrative_lines, wh_words)
+    tokens = build_timeline(all_lines, wh_words)
     print(f"  Mapped {len(tokens)} display tokens")
 
     # Load fonts
     font       = ImageFont.truetype(str(FONT_PATH), FONT_SIZE)
     title_font = ImageFont.truetype(str(FONT_PATH), TITLE_FONT_SIZE)
 
-    # Measure font height once
+    # Reference draw surface for measurements
     _ref_img  = Image.new("RGB", (10, 10))
     _ref_draw = ImageDraw.Draw(_ref_img)
-    font_h = _ref_draw.textbbox((0, 0), "字", font=font)[3]
 
-    body_top    = V_TOP + TITLE_FONT_SIZE + TITLE_GAP
-    body_height = HEIGHT - body_top - 40
+    # Pre-compute scroll layout (same every frame)
+    layout = compute_layout(all_lines, font, title_font, _ref_draw)
+
+    viewport_h = HEIGHT - SCROLL_PAD - PROGRESS_H
 
     total_frames = int((duration + 1.5) * FPS)   # +1.5 s tail
 
@@ -371,17 +386,12 @@ def generate(story_path, audio_path, output_path, model_name="base"):
             cur_idx = active_token_index(tokens, t)
 
             # Smooth camera scroll
-            tgt = target_camera_y(
-                narrative_lines, tokens, cur_idx,
-                font, font_h, _ref_draw,
-                body_top, body_height,
-            )
+            tgt = target_camera_y(tokens, cur_idx, layout, viewport_h)
             camera_y += (tgt - camera_y) * SCROLL_EASE
 
             img = render_frame(
-                narrative_lines, tokens, cur_idx, t,
-                font, title_font, title,
-                camera_y, font_h,
+                all_lines, tokens, cur_idx, t,
+                font, title_font, layout, camera_y,
             )
             img.save(os.path.join(tmpdir, f"f{fn:06d}.png"))
 
@@ -412,7 +422,7 @@ if __name__ == "__main__":
     ap.add_argument("--story",  required=True, help="Path to story.md")
     ap.add_argument("--audio",  required=True, help="Path to narration audio (.mp3)")
     ap.add_argument("--output", required=True, help="Output path (.mp4)")
-    ap.add_argument("--model",  default="base",
-                    help="Whisper model: tiny | base | small (default: base)")
+    ap.add_argument("--model",  default="small",
+                    help="Whisper model: tiny | base | small (default: small)")
     args = ap.parse_args()
     generate(args.story, args.audio, args.output, args.model)

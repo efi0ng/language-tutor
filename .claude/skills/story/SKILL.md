@@ -67,22 +67,55 @@ The vocabulary table should list key words used in the story. Include romanizati
 
 ### 2. `narration.mp3` — Audio narration
 
-Generate using the TTS tool. Only narrate the story text itself (not the title, vocabulary, or questions).
-
-Extract the plain story text (no markdown formatting) and run:
-```bash
-venv/bin/python tools/tts.py \
-  --file temp/story_text.txt \
-  --output materials/{language}/stories/{language_level}/{story_name}/narration.mp3 \
-  --lang {tts_lang_code} \
-  --rate="-15%"
-```
+The narration announces the story title, pauses for two seconds, then reads the story body. This matches the karaoke video, which displays the title as the first scrollable line.
 
 IMPORTANT: Always use `--rate="value"` with `=` (not a space) because the leading `-` in rates like `-15%` confuses argparse.
 
 Use `--rate="-15%"` for beginner levels (HSK1-2, JLPT N5-N4, A1-A2) to slow down speech. Use `--rate="-5%"` for intermediate and `--rate="+0%"` for advanced.
 
-If the story text is long or contains special characters that may cause shell quoting issues, write the plain text to a temporary file and use `--file` instead of `--text`.
+Steps:
+
+**a.** Write the story title (plain text, no markdown) to `temp/title_text.txt`, then generate title audio:
+```bash
+venv/bin/python tools/tts.py \
+  --file temp/title_text.txt \
+  --output temp/title.mp3 \
+  --lang {tts_lang_code} \
+  --rate="-15%"
+```
+
+**b.** Write the plain story body text (no markdown, no title) to `temp/story_text.txt`, then generate story audio:
+```bash
+venv/bin/python tools/tts.py \
+  --file temp/story_text.txt \
+  --output temp/story_narration.mp3 \
+  --lang {tts_lang_code} \
+  --rate="-15%"
+```
+
+**c.** Concatenate title + 2-second silence + story into the final `narration.mp3`:
+```bash
+ffmpeg -y \
+  -i temp/title.mp3 \
+  -i temp/story_narration.mp3 \
+  -filter_complex "[0:a][1:a]acrossfade=d=0,adelay=0|0[a0];[a0]anull[out]" \
+  -map "[out]" -acodec libmp3lame -ab 128k \
+  materials/{language}/stories/{language_level}/{story_name}/narration.mp3
+```
+
+Actually, use this simpler and more reliable concat approach:
+```bash
+# Generate 2-second silence
+ffmpeg -y -f lavfi -i anullsrc=r=24000:cl=mono -t 2 -acodec libmp3lame -ab 128k temp/silence.mp3
+
+# Write concat list (use absolute paths)
+printf "file '$(pwd)/temp/title.mp3'\nfile '$(pwd)/temp/silence.mp3'\nfile '$(pwd)/temp/story_narration.mp3'\n" > temp/concat_list.txt
+
+# Concatenate
+ffmpeg -y -f concat -safe 0 -i temp/concat_list.txt \
+  -acodec libmp3lame -ab 128k \
+  materials/{language}/stories/{language_level}/{story_name}/narration.mp3
+```
 
 ### 3. `questions.md` — Comprehension questions
 
@@ -146,7 +179,7 @@ venv/bin/python tools/pdf.py \
 4. Write the comprehension questions to `questions.md`.
 5. Write the comprehension question answer key to `answerkey.md`.
 6. Write the English translation to `translation.md`.
-7. Write the plain story text (no markdown) to a temp file, then generate `narration.mp3` using the TTS tool.
-8. Generate `story.pdf` using the PDF tool with the same temp file and the story title.
-9. Clean up the temp file.
+7. Generate `narration.mp3` with title announcement: write the title to `temp/title_text.txt` and the plain story body to `temp/story_text.txt`, generate each as separate MP3s, then concatenate with a 2-second silence between them as described in section 2 above.
+8. Generate `story.pdf` using the PDF tool with `temp/story_text.txt` and the story title.
+9. Clean up temp files: `temp/title_text.txt`, `temp/story_text.txt`, `temp/title.mp3`, `temp/story_narration.mp3`, `temp/silence.mp3`, `temp/concat_list.txt`.
 10. Report to the user what was created, including the file paths.
