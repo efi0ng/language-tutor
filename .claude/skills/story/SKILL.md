@@ -67,7 +67,7 @@ The vocabulary table should list key words used in the story. Include romanizati
 
 ### 2. `narration.mp3` — Audio narration
 
-The narration announces the story title, pauses for two seconds, then reads the story body. This matches the karaoke video, which displays the title as the first scrollable line.
+The narration announces the story title, pauses for one second, then reads the story body. This matches the karaoke video, which displays the title as the first scrollable line.
 
 IMPORTANT: Always use `--rate="value"` with `=` (not a space) because the leading `-` in rates like `-15%` confuses argparse.
 
@@ -106,7 +106,7 @@ ffmpeg -y \
 Actually, use this simpler and more reliable concat approach:
 ```bash
 # Generate 2-second silence
-ffmpeg -y -f lavfi -i anullsrc=r=24000:cl=mono -t 2 -acodec libmp3lame -ab 128k temp/silence.mp3
+ffmpeg -y -f lavfi -i anullsrc=r=24000:cl=mono -t 1 -acodec libmp3lame -ab 128k temp/silence.mp3
 
 # Write concat list (use absolute paths)
 printf "file '$(pwd)/temp/title.mp3'\nfile '$(pwd)/temp/silence.mp3'\nfile '$(pwd)/temp/story_narration.mp3'\n" > temp/concat_list.txt
