@@ -71,7 +71,7 @@ Generate using the TTS tool. Only narrate the story text itself (not the title, 
 
 Extract the plain story text (no markdown formatting) and run:
 ```bash
-/home/efi0ng/src/language_tutor/venv/bin/python /home/efi0ng/src/language_tutor/tools/tts.py \
+venv/bin/python tools/tts.py \
   --file temp/story_text.txt \
   --output materials/{language}/stories/{language_level}/{story_name}/narration.mp3 \
   --lang {tts_lang_code} \
@@ -124,7 +124,7 @@ Write a paragraph-by-paragraph English translation of the story. Structure:
 Generate a printable PDF of the story using the PDF tool. Use the plain story text (same as for narration) and the story title.
 
 ```bash
-/home/efi0ng/src/language_tutor/venv/bin/python /home/efi0ng/src/language_tutor/tools/pdf.py \
+venv/bin/python tools/pdf.py \
   --file temp/story_text.txt \
   --title "{Story Title}" \
   --output materials/{language}/stories/{language_level}/{story_name}/story.pdf
