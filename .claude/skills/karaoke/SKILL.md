@@ -30,6 +30,7 @@ In this mode: **first execute the full story generation skill** (as described in
   - If the user gives an explicit path, use it.
   - If the user gives language + level + story name, construct the path.
   - In chained mode, use the directory just created by the story skill.
+- **lang**: The TTS language code for the story (e.g. `zh-CN`, `en-US`, `fr-FR`, `ja-JP`). Derive from context or the story skill's language mapping. The tool uses this to configure Whisper and select character-level (CJK) vs word-level (Latin) highlighting.
 - **whisper_model** (optional): `tiny`, `base`, or `small`. Default: `small`. Use `tiny` for a quick preview; use `base` if the user wants a faster run at slightly lower accuracy.
 
 ## Procedure
@@ -42,6 +43,7 @@ In this mode: **first execute the full story generation skill** (as described in
      --story {story_dir}/story.md \
      --audio {story_dir}/narration.mp3 \
      --output {story_dir}/karaoke.mp4 \
+     --lang {lang} \
      --model {whisper_model}
    ```
    This takes 20–60 seconds depending on story length and model.
