@@ -16,8 +16,8 @@ import sys
 
 from fpdf import FPDF
 
-# Noto Sans SC Regular — TrueType outlines (glyf), instanced from variable font at wght=400
-DEFAULT_FONT = os.path.join(os.path.dirname(__file__), "NotoSansSC-Regular.ttf")
+# Noto Sans SC Bold — TrueType outlines (glyf), instanced from variable font at wght=700
+DEFAULT_FONT = os.path.join(os.path.dirname(__file__), "NotoSansSC-Bold.ttf")
 DEFAULT_FONT_SIZE = 18
 TITLE_FONT_SIZE = 26
 LINE_SPACING = 1.6  # multiplier for line height
