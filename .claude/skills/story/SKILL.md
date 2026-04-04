@@ -152,15 +152,25 @@ Write a paragraph-by-paragraph English translation of the story. Structure:
 {English translation of the story, preserving the same paragraph breaks as the original}
 ```
 
-### 6. `story.pdf` — Printable story
+### 6. `story.pdf` and `story_study.pdf` — Printable story
 
-Generate a printable PDF of the story using the PDF tool. Use the plain story text (same as for narration) and the story title.
+Generate two PDFs from the same plain story text:
 
+**Reading copy** (`story.pdf`) — normal flowing text:
 ```bash
 venv/bin/python tools/pdf.py \
   --file temp/story_text.txt \
   --title "{Story Title}" \
   --output materials/{language}/stories/{language_level}/{story_name}/story.pdf
+```
+
+**Study copy** (`story_study.pdf`) — writing-space layout (character grid for CJK; ruled translation lines for Latin scripts):
+```bash
+venv/bin/python tools/pdf.py \
+  --file temp/story_text.txt \
+  --title "{Story Title}" \
+  --mode study \
+  --output materials/{language}/stories/{language_level}/{story_name}/story_study.pdf
 ```
 
 ## Story writing guidelines
@@ -180,6 +190,6 @@ venv/bin/python tools/pdf.py \
 5. Write the comprehension question answer key to `answerkey.md`.
 6. Write the English translation to `translation.md`.
 7. Generate `narration.mp3` with title announcement: write the title to `temp/title_text.txt` and the plain story body to `temp/story_text.txt`, generate each as separate MP3s, then concatenate with a 2-second silence between them as described in section 2 above.
-8. Generate `story.pdf` using the PDF tool with `temp/story_text.txt` and the story title.
+8. Generate `story.pdf` (read mode) and `story_study.pdf` (study mode) using the PDF tool with `temp/story_text.txt` and the story title.
 9. Clean up temp files: `temp/title_text.txt`, `temp/story_text.txt`, `temp/title.mp3`, `temp/story_narration.mp3`, `temp/silence.mp3`, `temp/concat_list.txt`.
 10. Report to the user what was created, including the file paths.
