@@ -18,6 +18,7 @@ Modes:
 """
 
 import argparse
+import json
 import os
 
 from fpdf import FPDF
@@ -89,40 +90,72 @@ def create_pdf(text, output, title=None, font_path=DEFAULT_FONT, font_size=DEFAU
 # Study mode — CJK grid
 # ---------------------------------------------------------------------------
 
-def _split_into_rows(text, content_w):
-    """Split text into display rows.
+def _split_into_rows(char_items, content_w):
+    """Split char_items into display rows.
+
+    char_items: list of (char, color) — may include '\n' chars as line breaks.
 
     Returns a list where each entry is either:
-    - A list of characters (one row of the grid), or
+    - A list of (char, color) tuples (one row of the grid), or
     - None (marks a natural line break / paragraph gap from the source text).
     """
     rows = []
-    for line in text.split("\n"):
-        if not line.strip():
-            rows.append(None)
-            continue
+    current_row = []
+    current_w = 0
 
-        current_row = []
-        current_w = 0
-        for char in line:
-            if char in " \t":
-                continue  # spaces are meaningless in CJK flow
-            cw = _cell_w(char)
-            if current_w + cw > content_w and current_row:
+    for char, color in char_items:
+        if char == "\n":
+            if current_row:
                 rows.append(current_row)
                 current_row = []
                 current_w = 0
-            current_row.append(char)
-            current_w += cw
-
-        if current_row:
+            rows.append(None)
+            continue
+        if char in " \t":
+            continue  # spaces are meaningless in CJK flow
+        cw = _cell_w(char)
+        if current_w + cw > content_w and current_row:
             rows.append(current_row)
+            current_row = []
+            current_w = 0
+        current_row.append((char, color))
+        current_w += cw
+
+    if current_row:
+        rows.append(current_row)
 
     return rows
 
 
-def _draw_cjk_row_group(pdf, chars, y, content_w, font_size):
-    """Draw one 3-row group: hanzi | pinyin | English line."""
+def _text_to_char_items(text):
+    """Convert plain text to list of (char, None) items."""
+    items = []
+    for line in text.split("\n"):
+        if items:
+            items.append(("\n", None))
+        for char in line:
+            items.append((char, None))
+    return items
+
+
+def _annotations_to_char_items(annotations):
+    """Convert annotations JSON list to list of (char, color) items.
+
+    color is None or an (r, g, b) tuple.
+    """
+    items = []
+    for entry in annotations:
+        char = entry["char"]
+        color = entry.get("color")
+        items.append((char, tuple(color) if color else None))
+    return items
+
+
+def _draw_cjk_row_group(pdf, char_items, y, content_w, font_size):
+    """Draw one 3-row group: hanzi | pinyin | English line.
+
+    char_items: list of (char, color) where color is None or (r, g, b).
+    """
     # Vertical offset to center text within the hanzi cell.
     # fpdf2 places text at the baseline; we nudge down so the glyph sits centred.
     font_h_mm = font_size * 0.352778  # pt → mm
@@ -132,12 +165,17 @@ def _draw_cjk_row_group(pdf, chars, y, content_w, font_size):
 
     # --- Hanzi row ---
     pdf.set_font("CustomFont", "", font_size)
-    for char in chars:
+    for char, color in char_items:
         cw = _cell_w(char)
         pdf.rect(x, y, cw, HANZI_H)
         pdf.set_xy(x, y + v_offset)
+        if color:
+            pdf.set_text_color(*color)
+        else:
+            pdf.set_text_color(0, 0, 0)
         pdf.cell(cw, font_h_mm, char, align="C")
         x += cw
+    pdf.set_text_color(0, 0, 0)
     # Fill remainder so the row always spans full content width
     remainder = MARGIN + content_w - x
     if remainder > 0:
@@ -145,7 +183,7 @@ def _draw_cjk_row_group(pdf, chars, y, content_w, font_size):
 
     # --- Pinyin row (blank cells, same column structure) ---
     x = MARGIN
-    for char in chars:
+    for char, _ in char_items:
         cw = _cell_w(char)
         pdf.rect(x, y + HANZI_H, cw, PINYIN_H)
         x += cw
@@ -158,7 +196,9 @@ def _draw_cjk_row_group(pdf, chars, y, content_w, font_size):
     pdf.line(MARGIN, y_eng_bottom, MARGIN + content_w, y_eng_bottom)
 
 
-def create_study_cjk_pdf(text, output, title=None, font_path=DEFAULT_FONT, font_size=STUDY_FONT_SIZE):
+def create_study_cjk_pdf(text, output, title=None, font_path=DEFAULT_FONT,
+                         font_size=STUDY_FONT_SIZE, annotations=None):
+    """annotations: list of {"char": c, "color": [r,g,b]|null} from hsk_annotate."""
     pdf = FPDF()
     pdf.set_auto_page_break(auto=False, margin=MARGIN)
     pdf.add_page()
@@ -174,7 +214,13 @@ def create_study_cjk_pdf(text, output, title=None, font_path=DEFAULT_FONT, font_
         y += 12
 
     group_h = HANZI_H + PINYIN_H + ENG_H
-    rows = _split_into_rows(text, content_w)
+
+    if annotations is not None:
+        char_items = _annotations_to_char_items(annotations)
+    else:
+        char_items = _text_to_char_items(text)
+
+    rows = _split_into_rows(char_items, content_w)
 
     for row in rows:
         if row is None:
@@ -241,6 +287,7 @@ def main():
     parser.add_argument("--font-size", type=int, help="Body font size in pt")
     parser.add_argument("--mode", choices=["read", "study"], default="read",
                         help="read: normal text; study: writing-space layout (default: read)")
+    parser.add_argument("--annotations", help="JSON file from hsk_annotate.py (adds HSK level colors to study mode)")
 
     args = parser.parse_args()
 
@@ -249,11 +296,17 @@ def main():
 
     text = open(args.file, encoding="utf-8").read() if args.file else args.text
 
+    annotations = None
+    if args.annotations:
+        with open(args.annotations, encoding="utf-8") as f:
+            annotations = json.load(f)["annotations"]
+
     if args.mode == "study":
         if _has_cjk(text):
             font_size = args.font_size or STUDY_FONT_SIZE
             create_study_cjk_pdf(text, args.output, title=args.title,
-                                  font_path=args.font, font_size=font_size)
+                                  font_path=args.font, font_size=font_size,
+                                  annotations=annotations)
         else:
             font_size = args.font_size or DEFAULT_FONT_SIZE
             create_study_latin_pdf(text, args.output, title=args.title,
