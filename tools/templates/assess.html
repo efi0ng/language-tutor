@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HSK Assessment · {{ nickname }}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #f5f4f0;
+    --card:    #ffffff;
+    --border:  #ddd;
+    --text:    #1a1a1a;
+    --muted:   #888;
+    --green:   #2a7a3b;
+    --red:     #b02020;
+    --blue:    #1a4fa0;
+    --accent:  #3a6fd8;
+    --bar-bg:  #e0e0e0;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    width: 100%;
+    max-width: 640px;
+    padding: 20px 24px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header-title { font-size: 1rem; font-weight: 600; color: var(--muted); }
+  .header-level { font-size: 0.85rem; color: var(--muted); }
+
+  .toggles {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+
+  .toggle-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--muted);
+    transition: background 0.15s;
+  }
+  .toggle-btn.active { background: #eef2ff; border-color: var(--accent); color: var(--accent); }
+
+  main {
+    width: 100%;
+    max-width: 640px;
+    padding: 32px 24px;
+    flex: 1;
+  }
+
+  /* ---- Views ---- */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ---- Welcome ---- */
+  .welcome { text-align: center; padding-top: 60px; }
+  .welcome h1 { font-size: 1.8rem; margin-bottom: 12px; }
+  .welcome p  { color: var(--muted); margin-bottom: 32px; line-height: 1.5; }
+
+  /* ---- Phase banner ---- */
+  .phase-banner {
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+
+  /* ---- Progress bar ---- */
+  .progress-wrap { margin-bottom: 24px; }
+  .progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); margin-bottom: 5px; }
+  .progress-bar  { height: 6px; background: var(--bar-bg); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
+
+  /* ---- Card ---- */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 36px 32px 28px;
+    text-align: center;
+  }
+
+  /* ---- Recognition ---- */
+  .chinese-word {
+    font-size: 3.6rem;
+    line-height: 1.2;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+  }
+  .pinyin {
+    font-size: 1rem;
+    color: var(--muted);
+    margin-bottom: 28px;
+    min-height: 1.4em;
+  }
+  .pinyin.hidden { visibility: hidden; }
+
+  .choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .choice-btn {
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 10px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    background: var(--card);
+    text-align: left;
+    transition: border-color 0.12s, background 0.12s;
+    line-height: 1.3;
+  }
+  .choice-btn .key { font-weight: 700; margin-right: 6px; color: var(--accent); }
+  .choice-btn:hover:not(:disabled) { border-color: var(--accent); background: #f0f4ff; }
+  .choice-btn:disabled { cursor: default; }
+  .choice-btn.correct  { border-color: var(--green); background: #eaf5ec; }
+  .choice-btn.wrong    { border-color: var(--red);   background: #fdf0f0; }
+
+  /* ---- Production ---- */
+  .english-prompt {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .pos-tag {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+    min-height: 1.3em;
+  }
+  .pinyin-hint {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 24px;
+    min-height: 1.3em;
+  }
+  .pinyin-hint.hidden { visibility: hidden; }
+
+  .prod-input-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .prod-input {
+    flex: 1;
+    font-size: 1.4rem;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.12s;
+    font-family: inherit;
+  }
+  .prod-input:focus { border-color: var(--accent); }
+  .prod-input.correct { border-color: var(--green); background: #eaf5ec; }
+  .prod-input.wrong   { border-color: var(--red);   background: #fdf0f0; }
+
+  .prod-feedback {
+    margin-top: 14px;
+    min-height: 2.4em;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .prod-feedback.show-answer {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--red);
+    letter-spacing: 0.05em;
+  }
+
+  /* ---- Shared buttons ---- */
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 11px 22px;
+    font-size: 1rem;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.88; }
+  .btn-primary   { background: var(--accent); color: white; }
+  .btn-secondary { background: #e8e8e8; color: var(--text); }
+  .btn-submit    { background: var(--accent); color: white; padding: 10px 18px; font-size: 1rem; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; font-weight: 600; }
+  .btn-submit:disabled { opacity: 0.45; cursor: default; }
+
+  /* ---- Results ---- */
+  .results-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; text-align: center; }
+  .determined-level {
+    text-align: center;
+    font-size: 1.1rem;
+    margin: 16px 0 24px;
+    padding: 14px 20px;
+    background: #eef2ff;
+    border: 1px solid #c0ccf0;
+    border-radius: 10px;
+  }
+  .determined-level strong { font-size: 1.4rem; color: var(--accent); }
+
+  .results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  .results-table th {
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+    padding: 7px 10px;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .results-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+  .results-table tr:last-child td { border-bottom: none; }
+  .pass  { color: var(--green); font-weight: 700; }
+  .fail  { color: var(--red);   font-weight: 700; }
+  .pct-bar {
+    display: inline-block;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--accent);
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  .close-note { text-align: center; margin-top: 28px; color: var(--muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-title">HSK Assessment · {{ nickname }}</div>
+    <div class="header-level">Current level: HSK {{ current_level }}</div>
+  </div>
+  <div class="toggles">
+    <button class="toggle-btn" id="btnPinyin" onclick="togglePinyin()">Pinyin</button>
+    <button class="toggle-btn" id="btnTTS" onclick="toggleTTS()">🔊 Audio</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- VIEW: Welcome -->
+  <div id="viewWelcome" class="view active welcome">
+    <h1>词汇测试</h1>
+    <p>
+      This test has three phases:<br>
+      <strong>Recognition</strong> — identify the English meaning of Chinese words<br>
+      <strong>Production</strong> — type the Chinese for an English prompt<br>
+      <strong>Confirmation</strong> — extended recognition at your determined level<br><br>
+      The test adapts to your answers and stops automatically.
+    </p>
+    <button class="btn btn-primary" onclick="startSession()">Start Assessment</button>
+  </div>
+
+  <!-- VIEW: Question -->
+  <div id="viewQuestion" class="view">
+
+    <div class="phase-banner" id="phaseBanner">Recognition</div>
+
+    <div class="progress-wrap">
+      <div class="progress-meta">
+        <span id="progressLabel">HSK 1 · Question 1</span>
+        <span id="progressFraction">0 / 20</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Recognition card -->
+    <div class="card" id="cardRecognition">
+      <div class="chinese-word" id="chineseWord">—</div>
+      <div class="pinyin hidden" id="pinyinText"></div>
+      <div class="choices" id="choicesGrid"></div>
+    </div>
+
+    <!-- Production card -->
+    <div class="card" id="cardProduction" style="display:none">
+      <div class="english-prompt" id="englishPrompt">—</div>
+      <div class="pos-tag" id="posTag"></div>
+      <div class="pinyin-hint hidden" id="pinyinHint"></div>
+      <div class="prod-input-row">
+        <input class="prod-input" id="prodInput" type="text" placeholder="Type Chinese…"
+               autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="btn-submit" id="btnSubmit" onclick="submitProduction()">Submit</button>
+      </div>
+      <div class="prod-feedback" id="prodFeedback"></div>
+    </div>
+
+  </div>
+
+  <!-- VIEW: Results -->
+  <div id="viewResults" class="view">
+    <div class="results-title">Assessment Complete</div>
+
+    <div class="determined-level" id="determinedLevelBox"></div>
+
+    <table class="results-table" id="resultsTable">
+      <thead>
+        <tr>
+          <th>Phase</th>
+          <th>Level</th>
+          <th>Score</th>
+          <th>Questions</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="resultsTbody"></tbody>
+    </table>
+
+    <div class="close-note">You can close this window. Results saved to your student profile.</div>
+  </div>
+
+</main>
+
+<script>
+const NICKNAME = {{ nickname | tojson }};
+const CURRENT_LEVEL = {{ current_level }};
+
+let sessionId = null;
+let showPinyin = false;
+let ttsEnabled = false;
+let isComposing = false;
+let awaitingNext = false;
+let currentPhase = null;
+
+// ---- Session ----
+
+async function startSession() {
+  const resp = await fetch('/api/start', { method: 'POST',
+    headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+  const data = await resp.json();
+  sessionId = data.session_id;
+  showView('viewQuestion');
+  fetchNext();
+}
+
+// ---- Question flow ----
+
+async function fetchNext() {
+  if (awaitingNext) return;
+  awaitingNext = true;
+  const resp = await fetch(`/api/next?session_id=${sessionId}`);
+  const q = await resp.json();
+  awaitingNext = false;
+
+  if (q.phase === 'done') {
+    fetchResults();
+    return;
+  }
+  renderQuestion(q);
+}
+
+function renderQuestion(q) {
+  currentPhase = q.phase;
+
+  // Phase banner
+  const bannerMap = { recognition: 'Recognition', production: 'Production', confirmation: 'Confirmation (Extended)' };
+  document.getElementById('phaseBanner').textContent = bannerMap[q.phase] || q.phase;
+
+  // Progress
+  const lvlLabel = q.level >= 7 ? 'HSK 7–9' : `HSK ${q.level}`;
+  document.getElementById('progressLabel').textContent = `${lvlLabel} · Question ${q.question_number}`;
+  document.getElementById('progressFraction').textContent = `${q.question_number} / ${q.total_in_level}`;
+  const pct = ((q.question_number - 1) / q.total_in_level) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+
+  if (q.phase === 'production') {
+    renderProduction(q);
+  } else {
+    renderRecognition(q);
+  }
+
+  // TTS auto-play
+  if (ttsEnabled && q.word) {
+    playTTS(q.word);
+  }
+}
+
+function renderRecognition(q) {
+  document.getElementById('cardRecognition').style.display = '';
+  document.getElementById('cardProduction').style.display = 'none';
+
+  document.getElementById('chineseWord').textContent = q.word;
+  const pinyinEl = document.getElementById('pinyinText');
+  pinyinEl.textContent = q.pinyin;
+  pinyinEl.className = 'pinyin' + (showPinyin ? '' : ' hidden');
+
+  const grid = document.getElementById('choicesGrid');
+  grid.innerHTML = '';
+  q.choices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<span class="key">${c.key}</span>${c.text}`;
+    btn.dataset.key = c.key;
+    btn.onclick = () => submitRecognition(c.key);
+    grid.appendChild(btn);
+  });
+}
+
+function renderProduction(q) {
+  document.getElementById('cardRecognition').style.display = 'none';
+  document.getElementById('cardProduction').style.display = '';
+
+  document.getElementById('englishPrompt').textContent = q.prompt;
+  document.getElementById('posTag').textContent = q.pos ? `(${q.pos})` : '';
+  const hintEl = document.getElementById('pinyinHint');
+  hintEl.textContent = q.pinyin_hint;
+  hintEl.className = 'pinyin-hint' + (showPinyin ? '' : ' hidden');
+
+  const input = document.getElementById('prodInput');
+  input.value = '';
+  input.className = 'prod-input';
+  input.disabled = false;
+  document.getElementById('prodFeedback').textContent = '';
+  document.getElementById('btnSubmit').disabled = false;
+  setTimeout(() => input.focus(), 50);
+}
+
+// ---- Answers ----
+
+async function submitRecognition(key) {
+  // Disable all buttons immediately
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+
+  const resp = await fetch('/api/answer', { method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ session_id: sessionId, phase: currentPhase, answer: key }) });
+  const data = await resp.json();
+
+  // Show feedback colours
+  document.querySelectorAll('.choice-btn').forEach(btn => {
+    const k = btn.dataset.key;
+    const correctKey = data.correct ? key : null;
+    // Find correct button by checking if its text matches correct_answer
+    if (k === key && !data.correct) btn.classList.add('wrong');
+  });
+  // Highlight the correct answer (find by matching text)
+  document.querySelectorAll('.choice-btn').forEach(btn => {
+    if (btn.querySelector('.key').nextSibling &&
+        btn.textContent.replace(btn.querySelector('.key').textContent, '').trim() === data.correct_answer.trim()) {
+      btn.classList.add('correct');
+    }
+  });
+
+  setTimeout(fetchNext, 900);
+}
+
+async function submitProduction() {
+  const input = document.getElementById('prodInput');
+  if (isComposing || input.disabled) return;
+  const answer = input.value.trim();
+  if (!answer) return;
+
+  input.disabled = true;
+  document.getElementById('btnSubmit').disabled = true;
+
+  const resp = await fetch('/api/answer', { method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ session_id: sessionId, phase: 'production', answer }) });
+  const data = await resp.json();
+
+  input.classList.add(data.correct ? 'correct' : 'wrong');
+  const fb = document.getElementById('prodFeedback');
+  if (!data.correct) {
+    fb.textContent = data.correct_answer;
+    fb.className = 'prod-feedback show-answer';
+    setTimeout(fetchNext, 2500);
+  } else {
+    fb.textContent = '';
+    fb.className = 'prod-feedback';
+    setTimeout(fetchNext, 900);
+  }
+}
+
+// ---- Results ----
+
+async function fetchResults() {
+  const resp = await fetch(`/api/results?session_id=${sessionId}`);
+  const data = await resp.json();
+  renderResults(data);
+  showView('viewResults');
+}
+
+function renderResults(data) {
+  const det = data.determined_level;
+  const detEl = document.getElementById('determinedLevelBox');
+  if (det > 0) {
+    const label = det >= 7 ? 'HSK 7–9' : `HSK ${det}`;
+    detEl.innerHTML = `Determined level: <strong>${label}</strong>`;
+  } else {
+    detEl.innerHTML = `No level confirmed yet — keep studying!`;
+  }
+
+  const tbody = document.getElementById('resultsTbody');
+  tbody.innerHTML = '';
+
+  const addRow = (phase, level, score, questions, passed) => {
+    const lvlLabel = level >= 7 ? 'HSK 7–9' : `HSK ${level}`;
+    const pct = Math.round(score * 100);
+    const barW = Math.max(4, pct);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${phase}</td>
+      <td>${lvlLabel}</td>
+      <td><span class="pct-bar" style="width:${barW}px"></span>${pct}%</td>
+      <td>${questions}</td>
+      <td class="${passed ? 'pass' : 'fail'}">${passed ? '✓ Pass' : '✗ Fail'}</td>
+    `;
+    tbody.appendChild(tr);
+  };
+
+  Object.entries(data.recognition || {}).forEach(([lvl, r]) =>
+    addRow('Recognition', parseInt(lvl), r.score, r.questions, r.passed));
+  Object.entries(data.production || {}).forEach(([lvl, r]) =>
+    addRow('Production', parseInt(lvl), r.score, r.questions, r.passed));
+  if (data.confirmation) {
+    const c = data.confirmation;
+    addRow('Confirmation', c.level, c.score, c.questions, c.passed);
+  }
+}
+
+// ---- Toggles ----
+
+function togglePinyin() {
+  showPinyin = !showPinyin;
+  document.getElementById('btnPinyin').classList.toggle('active', showPinyin);
+  // Update visible elements
+  ['pinyinText', 'pinyinHint'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !showPinyin);
+  });
+}
+
+function toggleTTS() {
+  ttsEnabled = !ttsEnabled;
+  document.getElementById('btnTTS').classList.toggle('active', ttsEnabled);
+}
+
+async function playTTS(word) {
+  try {
+    const resp = await fetch(`/api/tts?session_id=${sessionId}&word=${encodeURIComponent(word)}`);
+    if (resp.status === 204) return;
+    const blob = await resp.blob();
+    const audio = new Audio(URL.createObjectURL(blob));
+    audio.play();
+  } catch (e) { /* silent */ }
+}
+
+// ---- Keyboard ----
+
+document.addEventListener('keydown', e => {
+  if (currentPhase === 'recognition' || currentPhase === 'confirmation') {
+    const key = e.key.toUpperCase();
+    if (['A','B','C','D'].includes(key)) {
+      const btn = document.querySelector(`.choice-btn[data-key="${key}"]`);
+      if (btn && !btn.disabled) btn.click();
+    }
+  }
+});
+
+const prodInput = document.getElementById('prodInput');
+prodInput.addEventListener('compositionstart', () => { isComposing = true; });
+prodInput.addEventListener('compositionend',   () => { isComposing = false; });
+prodInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !isComposing) submitProduction();
+});
+
+// ---- Utils ----
+
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+</script>
+</body>
+</html>
