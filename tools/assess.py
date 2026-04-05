@@ -352,6 +352,23 @@ class AssessmentSession:
                 rec_ceiling = r.level
                 break
 
+        # Collect wrong words with definitions for study review (deduplicated)
+        seen = set()
+        wrong_words = []
+        for r in self.results:
+            for word, correct in zip(r.words, r.correct):
+                if not correct and word not in seen:
+                    seen.add(word)
+                    entry = self.cedict.get(word, {})
+                    wrong_words.append({
+                        "word": word,
+                        "pinyin": entry.get("pinyin", ""),
+                        "definition": assess_data._first_short_def(
+                            entry.get("definitions", []), max_len=80
+                        ),
+                        "level": entry.get("level", r.level),
+                    })
+
         return {
             "id": self.session_id,
             "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
@@ -364,6 +381,7 @@ class AssessmentSession:
             "determined_level": det,
             "previous_level": self.current_level_val,
             "recognition_ceiling": rec_ceiling,
+            "wrong_words": wrong_words,
         }
 
 

@@ -257,6 +257,9 @@
     margin-right: 6px;
   }
 
+  .wrong-words-title { font-size: 1.1rem; font-weight: 700; margin: 32px 0 8px; }
+  .wrong-words-table td:first-child { font-size: 1.4rem; font-weight: 700; }
+  .wrong-words-table td:nth-child(2) { color: var(--muted); font-size: 0.9rem; }
   .save-row { display: flex; align-items: center; gap: 16px; justify-content: center; margin-top: 28px; }
   .save-btn { padding: 10px 28px; border-radius: 8px; border: none; background: var(--green); color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity .15s; }
   .save-btn:disabled { opacity: .5; cursor: default; }
@@ -370,6 +373,16 @@
     <div class="save-row">
       <button class="save-btn" id="btnSave" onclick="saveResults()">Save to profile</button>
       <span class="save-status" id="saveStatus"></span>
+    </div>
+
+    <div id="wrongWordsSection" style="display:none">
+      <div class="wrong-words-title">Words to review</div>
+      <table class="results-table wrong-words-table">
+        <thead>
+          <tr><th>Word</th><th>Pinyin</th><th>Definition</th><th>Level</th></tr>
+        </thead>
+        <tbody id="wrongWordsTbody"></tbody>
+      </table>
     </div>
   </div>
 
@@ -648,6 +661,23 @@ function renderResults(data) {
   if (data.confirmation) {
     const c = data.confirmation;
     addRow('Confirmation', c.level, c.score, c.questions, c.passed);
+  }
+
+  // Wrong words review table
+  const wrong = data.wrong_words || [];
+  const section = document.getElementById('wrongWordsSection');
+  const wtbody = document.getElementById('wrongWordsTbody');
+  wtbody.innerHTML = '';
+  if (wrong.length > 0) {
+    wrong.forEach(w => {
+      const lvlLabel = w.level >= 7 ? 'HSK 7–9' : `HSK ${w.level}`;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${w.word}</td><td>${w.pinyin}</td><td>${w.definition}</td><td>${lvlLabel}</td>`;
+      wtbody.appendChild(tr);
+    });
+    section.style.display = '';
+  } else {
+    section.style.display = 'none';
   }
 }
 
