@@ -42,8 +42,8 @@ MIN_COMPLETIONS = 3          # completed materials at current level with read+li
 # Helpers
 # ---------------------------------------------------------------------------
 
-def student_dir(nickname):
-    return os.path.join(STUDENTS_DIR, nickname)
+def student_dir(nickname, language):
+    return os.path.join(STUDENTS_DIR, nickname, language)
 
 
 def load_json(path, default):
@@ -58,10 +58,10 @@ def save_json(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-def require_student(nickname):
-    path = os.path.join(student_dir(nickname), "profile.json")
+def require_student(nickname, language):
+    path = os.path.join(student_dir(nickname, language), "profile.json")
     if not os.path.exists(path):
-        print(f"Error: student '{nickname}' not found. Run 'init' first.", file=sys.stderr)
+        print(f"Error: no profile for '{nickname}/{language}'. Run 'init' first.", file=sys.stderr)
         sys.exit(1)
     return load_json(path, {})
 
@@ -141,7 +141,7 @@ def get_material_info(path):
     return mat_type, level, name, title, md_path_abs
 
 
-def update_vocabulary(nickname, text, source_name, word_level):
+def update_vocabulary(nickname, language, text, source_name, word_level):
     """Segment text and merge word frequencies into vocabulary.json."""
     jieba.initialize()
     for word in word_level:
@@ -160,7 +160,7 @@ def update_vocabulary(nickname, text, source_name, word_level):
                     if is_cjk(char) and char in word_level:
                         seen.add(char)
 
-    voc_path = os.path.join(student_dir(nickname), "vocabulary.json")
+    voc_path = os.path.join(student_dir(nickname, language), "vocabulary.json")
     vocab = load_json(voc_path, {})
 
     for word in seen:
@@ -184,32 +184,32 @@ def update_vocabulary(nickname, text, source_name, word_level):
 # ---------------------------------------------------------------------------
 
 def cmd_init(args):
-    d = student_dir(args.nickname)
+    d = student_dir(args.nickname, args.language)
     os.makedirs(d, exist_ok=True)
     profile_path = os.path.join(d, "profile.json")
     if os.path.exists(profile_path) and not args.force:
-        print(f"Student '{args.nickname}' already exists. Use --force to overwrite.")
+        print(f"Profile '{args.nickname}/{args.language}' already exists. Use --force to overwrite.")
         return
     save_json(profile_path, {
         "nickname": args.nickname,
-        "language": "chinese",
+        "language": args.language,
         "current_level": args.level,
         "started": str(date.today()),
     })
     save_json(os.path.join(d, "completed.json"), [])
     save_json(os.path.join(d, "vocabulary.json"), {})
-    print(f"Created student '{args.nickname}' at HSK {args.level}.")
+    print(f"Created profile '{args.nickname}/{args.language}' at HSK {args.level}.")
 
 
 def cmd_complete(args):
-    require_student(args.nickname)
+    require_student(args.nickname, args.language)
     mat_type, level, name, title, md_path = get_material_info(args.path)
 
     if not md_path or not os.path.exists(md_path):
         print(f"Error: cannot find content file at {md_path}", file=sys.stderr)
         sys.exit(1)
 
-    comp_path = os.path.join(student_dir(args.nickname), "completed.json")
+    comp_path = os.path.join(student_dir(args.nickname, args.language), "completed.json")
     completed = load_json(comp_path, [])
 
     existing = next((e for e in completed if e["path"] == args.path), None)
@@ -231,13 +231,13 @@ def cmd_complete(args):
     save_json(comp_path, completed)
 
     word_level, _ = load_hsk_dict()
-    n = update_vocabulary(args.nickname, extract_body_text(md_path), name, word_level)
+    n = update_vocabulary(args.nickname, args.language, extract_body_text(md_path), name, word_level)
     print(f"Vocabulary: {n} unique HSK words seen in this material.")
 
 
 def cmd_add_modality(args):
-    require_student(args.nickname)
-    comp_path = os.path.join(student_dir(args.nickname), "completed.json")
+    require_student(args.nickname, args.language)
+    comp_path = os.path.join(student_dir(args.nickname, args.language), "completed.json")
     completed = load_json(comp_path, [])
 
     existing = next((e for e in completed if e["path"] == args.path), None)
@@ -254,12 +254,12 @@ def cmd_add_modality(args):
 
 
 def cmd_stats(args):
-    profile = require_student(args.nickname)
+    profile = require_student(args.nickname, args.language)
     current_level = int(profile.get("current_level", 1))
 
     word_level, words_by_level = load_hsk_dict()
-    vocab = load_json(os.path.join(student_dir(args.nickname), "vocabulary.json"), {})
-    completed = load_json(os.path.join(student_dir(args.nickname), "completed.json"), [])
+    vocab = load_json(os.path.join(student_dir(args.nickname, args.language), "vocabulary.json"), {})
+    completed = load_json(os.path.join(student_dir(args.nickname, args.language), "completed.json"), [])
     seen_words = set(vocab.keys())
 
     print(f"\n=== {args.nickname}  (HSK {current_level}) ===\n")
@@ -317,22 +317,26 @@ def main():
 
     p = sub.add_parser("init", help="Create a new student profile")
     p.add_argument("nickname")
+    p.add_argument("--language", required=True, help="Language being studied (e.g. chinese, english)")
     p.add_argument("--level", type=int, default=1, help="Starting HSK level (default: 1)")
     p.add_argument("--force", action="store_true", help="Overwrite existing profile")
 
     p = sub.add_parser("complete", help="Mark a material as completed")
     p.add_argument("nickname")
+    p.add_argument("--language", required=True)
     p.add_argument("--path", required=True)
     p.add_argument("--modalities", nargs="+", required=True,
                    choices=["read", "listened", "spoken"])
 
     p = sub.add_parser("add-modality", help="Add a modality to a completed material")
     p.add_argument("nickname")
+    p.add_argument("--language", required=True)
     p.add_argument("--path", required=True)
     p.add_argument("--modality", required=True, choices=["read", "listened", "spoken"])
 
     p = sub.add_parser("stats", help="Show progress and readiness")
     p.add_argument("nickname")
+    p.add_argument("--language", required=True)
 
     args = parser.parse_args()
     {"init": cmd_init, "complete": cmd_complete,

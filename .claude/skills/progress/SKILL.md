@@ -12,6 +12,7 @@ This skill activates when the user wants to record study activity or check progr
 ## Inputs
 
 - **nickname**: The student's nickname. Default to `efi0ng` if the user refers to themselves. Use `mulata` for the user's wife. Ask if ambiguous.
+- **language**: The language being studied. `efi0ng` studies `chinese`; `mulata` studies `english`. Ask if ambiguous.
 - **action**: One of `complete`, `add-modality`, `stats`
 - **path**: Material path (for `complete` and `add-modality`), e.g. `materials/chinese/stories/HSK1/the_painter`
 - **modalities**: One or more of `read`, `listened`, `spoken`
@@ -29,6 +30,7 @@ This skill activates when the user wants to record study activity or check progr
 ### Mark a material complete
 ```bash
 venv/bin/python tools/student.py complete {nickname} \
+  --language {language} \
   --path {material_path} \
   --modalities {modality1} [{modality2} ...]
 ```
@@ -38,13 +40,14 @@ If the material is already in the completed list, this merges the new modalities
 ### Add a single modality to an existing completion
 ```bash
 venv/bin/python tools/student.py add-modality {nickname} \
+  --language {language} \
   --path {material_path} \
   --modality {modality}
 ```
 
 ### Show progress and readiness stats
 ```bash
-venv/bin/python tools/student.py stats {nickname}
+venv/bin/python tools/student.py stats {nickname} --language {language}
 ```
 
 ## Material paths
