@@ -303,6 +303,10 @@ class AssessmentSession:
         max_w = EXTENDED_COUNT if cr.phase == "confirmation" else MAX_WORDS
         cr.status = check_level_status(cr.n(), cr.c(), max_w)
 
+        # 4 consecutive wrong answers → immediate fail at any point
+        if cr.status == "ongoing" and len(cr.correct) >= 4 and not any(cr.correct[-4:]):
+            cr.status = "failed"
+
         if cr.status != "ongoing":
             self._finish_current_level()
 
