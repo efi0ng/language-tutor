@@ -148,6 +148,10 @@
     font-size: 1.8rem;
     font-weight: 600;
     margin-bottom: 6px;
+    line-height: 1.4;
+  }
+  .english-prompt.long {
+    font-size: 1.2rem;
   }
   .pos-tag {
     font-size: 0.82rem;
@@ -462,11 +466,14 @@ function renderProduction(q) {
   document.getElementById('cardRecognition').style.display = 'none';
   document.getElementById('cardProduction').style.display = '';
 
-  document.getElementById('englishPrompt').textContent = q.prompt;
+  const promptEl = document.getElementById('englishPrompt');
+  promptEl.textContent = q.prompt;
+  promptEl.classList.toggle('long', q.prompt.length > 60);
   document.getElementById('posTag').textContent = q.pos ? `(${q.pos})` : '';
+  // Never show pinyin in production — it gives away the answer
   const hintEl = document.getElementById('pinyinHint');
   hintEl.textContent = q.pinyin_hint;
-  hintEl.className = 'pinyin-hint' + (showPinyin ? '' : ' hidden');
+  hintEl.className = 'pinyin-hint hidden';
 
   const input = document.getElementById('prodInput');
   input.value = '';
@@ -646,10 +653,9 @@ function togglePinyin() {
   showPinyin = !showPinyin;
   document.getElementById('btnPinyin').classList.toggle('active', showPinyin);
   // Update visible elements
-  ['pinyinText', 'pinyinHint'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.toggle('hidden', !showPinyin);
-  });
+  // Only toggle pinyin on the recognition card; production always hides it
+  const pinyinText = document.getElementById('pinyinText');
+  if (pinyinText) pinyinText.classList.toggle('hidden', !showPinyin);
 }
 
 function toggleTTS() {

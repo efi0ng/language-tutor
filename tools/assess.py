@@ -271,7 +271,7 @@ class AssessmentSession:
                 "level": cr.level,
                 "question_number": word_idx + 1,
                 "total_in_level": total,
-                "prompt": assess_data._first_short_def(entry.get("definitions", [])),
+                "prompt": assess_data._first_short_def(entry.get("definitions", []), max_len=150),
                 "pos": entry.get("pos", ""),
                 "pinyin_hint": entry.get("pinyin", ""),
             }

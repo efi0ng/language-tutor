@@ -96,20 +96,25 @@ _EXAMPLE_RE = re.compile(
 )
 # Inline Chinese cross-references: characters followed by [pinyin]
 _HANZI_REF_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+\[[^\]]+\]')
+# Any parenthesised or bracketed content containing CJK characters
+_CJK_PAREN_RE = re.compile(
+    r'\s*[\(\[][^\)\]]*[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff][^\)\]]*[\)\]]'
+)
 
 
 def _clean_def(d: str) -> str:
-    """Strip usage examples and inline Chinese cross-references from a definition."""
+    """Strip usage examples, inline Chinese cross-references, and CJK in brackets."""
     d = _EXAMPLE_RE.sub('', d)
     d = _HANZI_REF_RE.sub('', d)
+    d = _CJK_PAREN_RE.sub('', d)
     return d.strip(' ,;')
 
 
-def _first_short_def(defs: list) -> str:
-    """Return first real definition, cleaned and truncated at 60 chars."""
+def _first_short_def(defs: list, max_len: int = 60) -> str:
+    """Return first real definition, cleaned and truncated at max_len chars."""
     real = _real_defs(defs)
     chosen = real[0] if real else (defs[0] if defs else "")
-    return _clean_def(chosen)[:60]
+    return _clean_def(chosen)[:max_len]
 
 
 def build_choices(word: str, level: int, cedict: dict,
