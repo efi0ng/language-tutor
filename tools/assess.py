@@ -436,10 +436,21 @@ def api_results():
     if not session:
         return jsonify({"error": "session not found"}), 404
     results = session.build_results()
+    return jsonify(results)
+
+
+@app.route("/api/save", methods=["POST"])
+def api_save():
+    data = request.get_json()
+    sid = data.get("session_id")
+    session = SESSIONS.get(sid)
+    if not session:
+        return jsonify({"error": "session not found"}), 404
     if not session.saved:
+        results = session.build_results()
         assess_data.save_assessment(_NICKNAME, _LANGUAGE, results)
         session.saved = True
-    return jsonify(results)
+    return jsonify({"saved": True})
 
 
 @app.route("/api/tts")

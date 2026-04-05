@@ -86,11 +86,29 @@ def _real_defs(defs: list) -> list:
     return [d for d in defs if not _META_RE.match(d)]
 
 
+# Patterns that introduce usage examples — everything from here to end of string is noise.
+_EXAMPLE_RE = re.compile(
+    r',?\s*as in\b.*'        # ", as in 第一[di4 yi1] first"
+    r'|,?\s*e\.g\..*'        # ", e.g. ..."
+    r'|\s*\(e\.g\..*?\)'     # " (e.g. ...)"
+    , re.IGNORECASE | re.DOTALL
+)
+# Inline Chinese cross-references: characters followed by [pinyin]
+_HANZI_REF_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]+\[[^\]]+\]')
+
+
+def _clean_def(d: str) -> str:
+    """Strip usage examples and inline Chinese cross-references from a definition."""
+    d = _EXAMPLE_RE.sub('', d)
+    d = _HANZI_REF_RE.sub('', d)
+    return d.strip(' ,;')
+
+
 def _first_short_def(defs: list) -> str:
-    """Return first real definition, truncated at 60 chars. Falls back to raw first def."""
+    """Return first real definition, cleaned and truncated at 60 chars."""
     real = _real_defs(defs)
     chosen = real[0] if real else (defs[0] if defs else "")
-    return chosen[:60]
+    return _clean_def(chosen)[:60]
 
 
 def build_choices(word: str, level: int, cedict: dict,

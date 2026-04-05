@@ -253,7 +253,28 @@
     margin-right: 6px;
   }
 
-  .close-note { text-align: center; margin-top: 28px; color: var(--muted); font-size: 0.85rem; }
+  .save-row { display: flex; align-items: center; gap: 16px; justify-content: center; margin-top: 28px; }
+  .save-btn { padding: 10px 28px; border-radius: 8px; border: none; background: var(--green); color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+  .save-btn:disabled { opacity: .5; cursor: default; }
+  .save-status { font-size: 0.9rem; }
+
+  .btn-dont-know {
+    display: block;
+    margin: 16px auto 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+    padding: 4px 10px;
+    border-radius: 4px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-family: inherit;
+    transition: color 0.15s;
+  }
+  .btn-dont-know:hover:not(:disabled) { color: var(--text); }
+  .btn-dont-know:disabled { opacity: 0.35; cursor: default; }
 </style>
 </head>
 <body>
@@ -304,6 +325,7 @@
       <div class="chinese-word" id="chineseWord">—</div>
       <div class="pinyin hidden" id="pinyinText"></div>
       <div class="choices" id="choicesGrid"></div>
+      <button class="btn-dont-know" id="btnDontKnowRec" onclick="dontKnow()">I don't know</button>
     </div>
 
     <!-- Production card -->
@@ -317,6 +339,7 @@
         <button class="btn-submit" id="btnSubmit" onclick="submitProduction()">Submit</button>
       </div>
       <div class="prod-feedback" id="prodFeedback"></div>
+      <button class="btn-dont-know" id="btnDontKnowProd" onclick="dontKnow()">I don't know</button>
     </div>
 
   </div>
@@ -340,7 +363,10 @@
       <tbody id="resultsTbody"></tbody>
     </table>
 
-    <div class="close-note">You can close this window. Results saved to your student profile.</div>
+    <div class="save-row">
+      <button class="save-btn" id="btnSave" onclick="saveResults()">Save to profile</button>
+      <span class="save-status" id="saveStatus"></span>
+    </div>
   </div>
 
 </main>
@@ -418,6 +444,8 @@ function renderRecognition(q) {
   pinyinEl.textContent = q.pinyin;
   pinyinEl.className = 'pinyin' + (showPinyin ? '' : ' hidden');
 
+  document.getElementById('btnDontKnowRec').disabled = false;
+
   const grid = document.getElementById('choicesGrid');
   grid.innerHTML = '';
   q.choices.forEach(c => {
@@ -445,15 +473,48 @@ function renderProduction(q) {
   input.className = 'prod-input';
   input.disabled = false;
   document.getElementById('prodFeedback').textContent = '';
+  document.getElementById('prodFeedback').className = 'prod-feedback';
   document.getElementById('btnSubmit').disabled = false;
+  document.getElementById('btnDontKnowProd').disabled = false;
   setTimeout(() => input.focus(), 50);
 }
 
 // ---- Answers ----
 
+async function dontKnow() {
+  // Disable all interactive elements for this card
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+  document.getElementById('btnDontKnowRec').disabled = true;
+  const prodInput = document.getElementById('prodInput');
+  prodInput.disabled = true;
+  document.getElementById('btnSubmit').disabled = true;
+  document.getElementById('btnDontKnowProd').disabled = true;
+
+  const resp = await fetch('/api/answer', { method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ session_id: sessionId, phase: currentPhase, answer: 'SKIP' }) });
+  const data = await resp.json();
+
+  if (currentPhase === 'recognition' || currentPhase === 'confirmation') {
+    // Highlight the correct button green so the student sees the answer
+    document.querySelectorAll('.choice-btn').forEach(btn => {
+      const text = btn.textContent.replace(btn.querySelector('.key').textContent, '').trim();
+      if (text === data.correct_answer.trim()) btn.classList.add('correct');
+    });
+    setTimeout(fetchNext, 1800);
+  } else {
+    prodInput.classList.add('wrong');
+    const fb = document.getElementById('prodFeedback');
+    fb.textContent = data.correct_answer;
+    fb.className = 'prod-feedback show-answer';
+    setTimeout(fetchNext, 2500);
+  }
+}
+
 async function submitRecognition(key) {
   // Disable all buttons immediately
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+  document.getElementById('btnDontKnowRec').disabled = true;
 
   const resp = await fetch('/api/answer', { method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -486,6 +547,7 @@ async function submitProduction() {
 
   input.disabled = true;
   document.getElementById('btnSubmit').disabled = true;
+  document.getElementById('btnDontKnowProd').disabled = true;
 
   const resp = await fetch('/api/answer', { method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -512,6 +574,32 @@ async function fetchResults() {
   const data = await resp.json();
   renderResults(data);
   showView('viewResults');
+}
+
+async function saveResults() {
+  const btn = document.getElementById('btnSave');
+  const status = document.getElementById('saveStatus');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    const resp = await fetch('/api/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: sessionId}),
+    });
+    if (resp.ok) {
+      btn.textContent = 'Saved';
+      status.textContent = 'Results saved to your student profile.';
+      status.style.color = 'var(--green)';
+    } else {
+      throw new Error('save failed');
+    }
+  } catch {
+    btn.disabled = false;
+    btn.textContent = 'Save to profile';
+    status.textContent = 'Save failed — try again.';
+    status.style.color = 'var(--red)';
+  }
 }
 
 function renderResults(data) {
