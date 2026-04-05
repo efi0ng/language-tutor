@@ -442,6 +442,8 @@ function renderQuestion(q) {
 function renderRecognition(q) {
   document.getElementById('cardRecognition').style.display = '';
   document.getElementById('cardProduction').style.display = 'none';
+  document.getElementById('btnPinyin').style.display = '';
+  document.getElementById('btnTTS').style.display = '';
 
   document.getElementById('chineseWord').textContent = q.word;
   const pinyinEl = document.getElementById('pinyinText');
@@ -470,6 +472,8 @@ function renderProduction(q) {
   promptEl.textContent = q.prompt;
   promptEl.classList.toggle('long', q.prompt.length > 60);
   document.getElementById('posTag').textContent = q.pos ? `(${q.pos})` : '';
+  document.getElementById('btnPinyin').style.display = 'none';
+  document.getElementById('btnTTS').style.display = 'none';
   // Never show pinyin in production — it gives away the answer
   const hintEl = document.getElementById('pinyinHint');
   hintEl.textContent = q.pinyin_hint;
