@@ -16,6 +16,7 @@ import unicodedata
 # These make terrible answer choices — filter them out.
 _META_RE = re.compile(
     r'^(old |archaic |erhua |Japanese )?variant of'
+    r'|^erhua\b'
     r'|^see '
     r'|^abbr\. (?:for|of)'
     r'|^surname\b'
