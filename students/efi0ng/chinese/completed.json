@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "path": "materials/chinese/stories/HSK1/ai_lab_mystery_overview",
+    "title": "侦探李明：故事简介",
+    "type": "story",
+    "level": "HSK1",
+    "date": "2026-04-05",
+    "modalities": [
+      "read"
+    ]
+  }
+]
