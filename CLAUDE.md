@@ -14,6 +14,7 @@ Language Tutor is a Claude Code environment for:
 ```
 materials/{language}/stories/{level}/{story_name}/   # Generated stories, audio, PDFs
 materials/{language}/extracts/{extract_name}/        # Real-world text extracts
+materials/{language}/flashcards/                     # Tracing-flashcard PDFs
 students/{nickname}/{language}/                      # Per-student progress data (gitignored assessments)
   profile.json                                       # Current level, start date
   completed.json                                     # Completed materials + modalities
@@ -59,6 +60,15 @@ venv/bin/python tools/pdf.py --file input.txt --output out.pdf --font /path/to/f
 Default font: `tools/NotoSansSC-Regular.ttf` (Noto Sans SC, TrueType outlines). Default size: 18pt.
 
 For HSK colour-coded study PDFs, use `--mode study --annotations temp/annotations.json`.
+
+### Flashcard Lightbox (`tools/flashcard.py`)
+Generates a PDF of 5"×3" flashcard fronts (one card per page) for tracing Chinese
+characters onto physical cards using an iPad as a backlight. Looks up pinyin and
+an English gloss from CEDICT; renders hanzi-only + warns if a word is missing.
+```
+venv/bin/python tools/flashcard.py --file words.txt --output flashcards.pdf
+```
+Prefer the `/flashcard` skill over calling this directly.
 
 ### HSK Annotator (`tools/hsk_annotate.py`)
 Segments Chinese text and outputs per-character HSK level annotations for colour-coded PDFs.
