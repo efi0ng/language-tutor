@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Vocabulary Sheet</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 11pt;
+    color: #111;
+    background: white;
+  }
+
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 10mm 14mm 8mm;
+    margin: 0 auto;
+    page-break-after: always;
+  }
+
+  /* ── Header ── */
+  .header {
+    margin-bottom: 5mm;
+  }
+
+  .header h1 {
+    font-size: 15pt;
+    font-weight: bold;
+    letter-spacing: 0.02em;
+    margin-bottom: 3mm;
+  }
+
+  .header h1 span {
+    font-size: 11pt;
+    font-weight: normal;
+    color: #555;
+    margin-left: 8pt;
+  }
+
+  .fields {
+    display: flex;
+    gap: 10mm;
+  }
+
+  .field {
+    display: flex;
+    align-items: baseline;
+    gap: 4pt;
+    flex: 1;
+  }
+
+  .field label {
+    font-size: 9pt;
+    color: #555;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .field .line {
+    flex: 1;
+    border-bottom: 1px solid #999;
+    height: 16pt;
+  }
+
+  /* ── Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #555;
+    padding: 0 3mm 2mm;
+    text-align: left;
+    border-bottom: 1.5px solid #333;
+  }
+
+  thead th:first-child {
+    width: 8mm;
+    text-align: center;
+    padding-left: 0;
+  }
+
+  thead th.col-word  { width: 46%; }
+  thead th.col-trans { width: 46%; }
+
+  tbody tr {
+    border-bottom: 1px solid #ccc;
+  }
+
+  tbody tr:nth-child(even) {
+    background: #f9f9f9;
+  }
+
+  tbody td {
+    height: 10mm;
+    padding: 0 3mm;
+    vertical-align: middle;
+  }
+
+  tbody td:first-child {
+    font-size: 8pt;
+    color: #aaa;
+    text-align: center;
+    padding: 0;
+    width: 8mm;
+  }
+
+  /* Column divider */
+  td.col-word, th.col-word {
+    border-right: 1px solid #ddd;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    margin-top: 5mm;
+    font-size: 8pt;
+    color: #bbb;
+    text-align: right;
+  }
+
+  /* ── Print ── */
+  @media print {
+    body { background: white; }
+    .page { margin: 0; padding: 8mm 12mm 6mm; }
+    tbody tr:nth-child(even) { background: #f5f5f5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 -->
+<div class="page">
+  <div class="header">
+    <h1>My Vocabulary <span>— What do I recognize?</span></h1>
+    <div class="fields">
+      <div class="field"><label>Name</label><div class="line"></div></div>
+      <div class="field"><label>Language</label><div class="line"></div></div>
+      <div class="field"><label>Date</label><div class="line"></div></div>
+      <div class="field"><label>Level</label><div class="line"></div></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th class="col-word">Word / Phrase</th>
+        <th class="col-trans">Translation / Meaning</th>
+      </tr>
+    </thead>
+    <tbody id="rows-p1"></tbody>
+  </table>
+
+  <div class="footer">Page 1</div>
+</div>
+
+<!-- PAGE 2 -->
+<div class="page">
+  <div class="header">
+    <h1>My Vocabulary <span>continued</span></h1>
+    <div class="fields">
+      <div class="field"><label>Name</label><div class="line"></div></div>
+      <div class="field"><label>Language</label><div class="line"></div></div>
+      <div class="field"><label>Date</label><div class="line"></div></div>
+      <div class="field"><label>Level</label><div class="line"></div></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th class="col-word">Word / Phrase</th>
+        <th class="col-trans">Translation / Meaning</th>
+      </tr>
+    </thead>
+    <tbody id="rows-p2"></tbody>
+  </table>
+
+  <div class="footer">Page 2</div>
+</div>
+
+<script>
+  function buildRows(tbodyId, start, count) {
+    const tbody = document.getElementById(tbodyId);
+    for (let i = 0; i < count; i++) {
+      const n = start + i;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${n}</td><td class="col-word"></td><td></td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  buildRows('rows-p1', 1,  20);
+  buildRows('rows-p2', 21, 20);
+</script>
+</body>
+</html>
