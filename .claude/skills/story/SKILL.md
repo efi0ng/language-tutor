@@ -152,7 +152,22 @@ Write a paragraph-by-paragraph English translation of the story. Structure:
 {English translation of the story, preserving the same paragraph breaks as the original}
 ```
 
-### 6. `story.pdf` and `story_study.pdf` — Printable story
+### 6. `questions.pdf` — Printable question sheet
+
+Write the plain-text questions (numbered list only, no markdown heading) to `temp/questions_text.txt`, then generate a printable PDF using study mode so each question gets a ruled blank line beneath it for the student's written answer:
+
+```bash
+venv/bin/python tools/pdf.py \
+  --file temp/questions_text.txt \
+  --title "{Comprehension Questions title in target language}" \
+  --mode study \
+  --font-size 18 \
+  --output materials/{language}/stories/{language_level}/{story_name}/questions.pdf
+```
+
+The plain text should contain only the numbered questions, one per line, with no markdown syntax (no `#` heading).
+
+### 7. `story.pdf` and `story_study.pdf` — Printable story
 
 Generate two PDFs from the same plain story text:
 
@@ -191,5 +206,6 @@ venv/bin/python tools/pdf.py \
 6. Write the English translation to `translation.md`.
 7. Generate `narration.mp3` with title announcement: write the title to `temp/title_text.txt` and the plain story body to `temp/story_text.txt`, generate each as separate MP3s, then concatenate with a 2-second silence between them as described in section 2 above.
 8. Generate `story.pdf` (read mode) and `story_study.pdf` (study mode) using the PDF tool with `temp/story_text.txt` and the story title.
-9. Clean up temp files: `temp/title_text.txt`, `temp/story_text.txt`, `temp/title.mp3`, `temp/story_narration.mp3`, `temp/silence.mp3`, `temp/concat_list.txt`.
-10. Report to the user what was created, including the file paths.
+9. Write the plain-text questions (numbered list, no markdown heading) to `temp/questions_text.txt`, then generate `questions.pdf` using `--mode study --font-size 18` as described in section 6.
+10. Clean up temp files: `temp/title_text.txt`, `temp/story_text.txt`, `temp/title.mp3`, `temp/story_narration.mp3`, `temp/silence.mp3`, `temp/concat_list.txt`, `temp/questions_text.txt`.
+11. Report to the user what was created, including the file paths.
