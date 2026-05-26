@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Generate a 2-page vocabulary worksheet PDF.
+"""Generate a vocabulary reference list PDF.
 
 Usage:
     venv/bin/python tools/vocab_sheet.py \
         --output temp/vocab_sheet.pdf \
-        --words "调查|diàochá" "发现|fāxiàn"
+        --words "调查|diàochá|investigate" "发现|fāxiàn|discover" \
+        --title "AI Lab Mystery"
 """
 
 import argparse
+import math
 import os
 
 from fpdf import FPDF
@@ -15,202 +17,171 @@ from fpdf import FPDF
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_FONT = os.path.join(TOOLS_DIR, "NotoSansSC-Regular.ttf")
 
-MARGIN = 15          # mm
-ROWS_PER_PAGE = 20
-TOTAL_ROWS = 40
-ROW_H = 10           # mm
-NUM_COL_W = 8        # mm
-CONTENT_W = 210 - 2 * MARGIN   # 180 mm
-WORD_COL_W = (CONTENT_W - NUM_COL_W) / 2   # 86 mm
-TRANS_COL_W = CONTENT_W - NUM_COL_W - WORD_COL_W   # 86 mm
+PAGE_W = 210
+PAGE_H = 297
+MARGIN = 15
+CONTENT_W = PAGE_W - 2 * MARGIN   # 180mm
+COL_GAP = 5
+COL_W = (CONTENT_W - COL_GAP) / 2  # 87.5mm
 
-GRAY_LIGHT = (249, 249, 249)
-GRAY_MED = (170, 170, 170)
-GRAY_DARK = (85, 85, 85)
+WORD_COL_W = 48       # mm — word/pinyin sub-column
+TRANS_COL_W = COL_W - WORD_COL_W   # 39.5mm — translation sub-column
+
+CJK_ROW_H = 12   # mm — hanzi + pinyin stacked
+LATIN_ROW_H = 8  # mm — single line
+
+GRAY_LIGHT = (247, 247, 247)
+GRAY_DARK = (100, 100, 100)
+GRAY_SEP = (210, 210, 210)
 BLACK = (0, 0, 0)
+
+FONT_NAME = "NotoSC"
 
 
 def _setup_font(pdf, font_path):
-    pdf.add_font("NotoSC", "", font_path)
-    pdf.add_font("NotoSC", "B", font_path)
+    pdf.add_font(FONT_NAME, "", font_path)
+    pdf.add_font(FONT_NAME, "B", font_path)
 
 
-def _draw_header(pdf, page_num, y):
-    """Draw title + field lines. Returns the y position after the header."""
-    # Title
-    pdf.set_font("NotoSC", "B", 15)
+def _draw_header(pdf, title, y):
+    """Draw "Vocabulary" heading and optional story subtitle. Returns y after header."""
+    pdf.set_font(FONT_NAME, "B", 14)
     pdf.set_text_color(*BLACK)
     pdf.set_xy(MARGIN, y)
-    pdf.cell(0, 7, "My Vocabulary", new_x="END", new_y="LAST")
+    pdf.cell(0, 7, "Vocabulary")
+    y += 8
 
-    subtitle = "— What do I recognize?" if page_num == 1 else "continued"
-    pdf.set_font("NotoSC", "", 11)
-    pdf.set_text_color(*GRAY_DARK)
-    pdf.set_x(pdf.get_x() + 3)
-    pdf.cell(0, 7, subtitle)
-    y += 9
+    if title:
+        pdf.set_font(FONT_NAME, "", 9)
+        pdf.set_text_color(*GRAY_DARK)
+        pdf.set_xy(MARGIN, y)
+        pdf.cell(0, 5, title)
+        y += 6
 
-    # Field lines: Name / Language / Date / Level
-    fields = ["Name", "Language", "Date", "Level"]
-    field_w = CONTENT_W / len(fields)
-    label_w = 18  # approximate label width in mm
-
-    pdf.set_font("NotoSC", "", 8)
-    pdf.set_text_color(*GRAY_DARK)
-    y_field = y + 1
-    for i, label in enumerate(fields):
-        x = MARGIN + i * field_w
-        pdf.set_xy(x, y_field)
-        pdf.cell(label_w, 5, label.upper())
-        # ruled line
-        line_x = x + label_w + 1
-        line_end = x + field_w - 2
-        pdf.set_draw_color(*GRAY_MED)
-        pdf.line(line_x, y_field + 4, line_end, y_field + 4)
-
-    pdf.set_text_color(*BLACK)
-    pdf.set_draw_color(*BLACK)
-    return y + 11
-
-
-def _draw_table_header(pdf, y):
-    """Draw column labels + thick rule. Returns y after the header row."""
-    pdf.set_font("NotoSC", "", 8)
-    pdf.set_text_color(*GRAY_DARK)
-
-    pdf.set_xy(MARGIN, y)
-    pdf.cell(NUM_COL_W, 6, "#", align="C")
-    pdf.set_xy(MARGIN + NUM_COL_W, y)
-    pdf.cell(WORD_COL_W, 6, "WORD / PHRASE")
-    pdf.set_xy(MARGIN + NUM_COL_W + WORD_COL_W, y)
-    pdf.cell(TRANS_COL_W, 6, "TRANSLATION / MEANING")
-
-    y += 6
-    pdf.set_draw_color(*BLACK)
-    pdf.set_line_width(0.5)
+    pdf.set_draw_color(*GRAY_SEP)
+    pdf.set_line_width(0.3)
     pdf.line(MARGIN, y, MARGIN + CONTENT_W, y)
     pdf.set_line_width(0.2)
-    pdf.set_text_color(*BLACK)
-    return y
+    pdf.set_draw_color(*BLACK)
+    return y + 3
 
 
-def _draw_row(pdf, y, row_num, word=None, pinyin=None):
-    """Draw one data row. word/pinyin pre-populate the left column if given."""
-    # Alternating background
-    if row_num % 2 == 0:
-        pdf.set_fill_color(*GRAY_LIGHT)
-        pdf.rect(MARGIN, y, CONTENT_W, ROW_H, style="F")
+def _draw_column(pdf, col_x, y_start, words_slice, row_h):
+    """Render a list of (word, pinyin, translation) tuples as a two-sub-column block."""
+    is_cjk = any(p for _, p, _ in words_slice)
 
-    # Row divider
-    pdf.set_draw_color(204, 204, 204)
-    pdf.line(MARGIN, y + ROW_H, MARGIN + CONTENT_W, y + ROW_H)
+    for i, (word, pinyin, translation) in enumerate(words_slice):
+        y = y_start + i * row_h
 
-    # Row number
-    pdf.set_font("NotoSC", "", 8)
-    pdf.set_text_color(*GRAY_MED)
-    pdf.set_xy(MARGIN, y + (ROW_H - 8 * 0.352778) / 2)
-    pdf.cell(NUM_COL_W, 8 * 0.352778, str(row_num), align="C")
+        if i % 2 == 1:
+            pdf.set_fill_color(*GRAY_LIGHT)
+            pdf.rect(col_x, y, COL_W, row_h, style="F")
 
-    # Vertical divider between word and translation columns
-    word_col_end_x = MARGIN + NUM_COL_W + WORD_COL_W
-    pdf.set_draw_color(221, 221, 221)
-    pdf.line(word_col_end_x, y, word_col_end_x, y + ROW_H)
+        pdf.set_draw_color(*GRAY_SEP)
+        pdf.set_line_width(0.15)
+        pdf.line(col_x, y + row_h, col_x + COL_W, y + row_h)
 
-    # Pre-populated word content
-    if word:
-        word_x = MARGIN + NUM_COL_W + 2
-        if pinyin:
-            # Stack: word (12pt) on top, pinyin (9pt, gray) below
-            word_h = 12 * 0.352778
-            pinyin_h = 9 * 0.352778
-            total_h = word_h + pinyin_h + 0.5
-            word_y = y + (ROW_H - total_h) / 2
+        div_x = col_x + WORD_COL_W
+        pdf.line(div_x, y, div_x, y + row_h)
 
-            pdf.set_font("NotoSC", "B", 12)
+        word_x = col_x + 2
+
+        if is_cjk and pinyin:
+            hanzi_pt, pinyin_pt = 11, 8
+            hanzi_h = hanzi_pt * 0.352778
+            pinyin_h = pinyin_pt * 0.352778
+            stack_h = hanzi_h + 0.8 + pinyin_h
+            word_y = y + (row_h - stack_h) / 2
+
+            pdf.set_font(FONT_NAME, "B", hanzi_pt)
             pdf.set_text_color(*BLACK)
             pdf.set_xy(word_x, word_y)
-            pdf.cell(WORD_COL_W - 4, word_h, word)
+            pdf.cell(WORD_COL_W - 3, hanzi_h, word)
 
-            pdf.set_font("NotoSC", "", 9)
+            pdf.set_font(FONT_NAME, "", pinyin_pt)
             pdf.set_text_color(*GRAY_DARK)
-            pdf.set_xy(word_x, word_y + word_h + 0.5)
-            pdf.cell(WORD_COL_W - 4, pinyin_h, pinyin)
+            pdf.set_xy(word_x, word_y + hanzi_h + 0.8)
+            pdf.cell(WORD_COL_W - 3, pinyin_h, pinyin)
         else:
-            # Single line: word only
-            pdf.set_font("NotoSC", "B", 12)
+            word_pt = 10
+            word_h_mm = word_pt * 0.352778
+            pdf.set_font(FONT_NAME, "B", word_pt)
             pdf.set_text_color(*BLACK)
-            word_h = 12 * 0.352778
-            pdf.set_xy(word_x, y + (ROW_H - word_h) / 2)
-            pdf.cell(WORD_COL_W - 4, word_h, word)
+            pdf.set_xy(word_x, y + (row_h - word_h_mm) / 2)
+            pdf.cell(WORD_COL_W - 3, word_h_mm, word)
 
-    pdf.set_text_color(*BLACK)
+        trans_pt = 9
+        trans_h_mm = trans_pt * 0.352778
+        pdf.set_font(FONT_NAME, "", trans_pt)
+        pdf.set_text_color(*GRAY_DARK)
+        pdf.set_xy(div_x + 2, y + (row_h - trans_h_mm) / 2)
+        pdf.cell(TRANS_COL_W - 2, trans_h_mm, translation)
+
     pdf.set_draw_color(*BLACK)
-
-
-def _draw_footer(pdf, page_num):
-    """Draw page number at bottom right."""
-    pdf.set_font("NotoSC", "", 8)
-    pdf.set_text_color(*GRAY_MED)
-    pdf.set_xy(MARGIN, 297 - MARGIN - 5)
-    pdf.cell(CONTENT_W, 5, f"Page {page_num}", align="R")
     pdf.set_text_color(*BLACK)
+    pdf.set_line_width(0.2)
 
 
-def generate(output, words, font_path=DEFAULT_FONT):
-    """Build 2-page vocabulary PDF.
+def generate(output, words, title=None, font_path=DEFAULT_FONT):
+    """Build vocabulary reference PDF.
 
-    words: list of (word, pinyin) tuples for pre-populated rows.
-           Rows beyond len(words) are blank.
+    words: list of (word, pinyin, translation) tuples.
     """
+    is_cjk = any(p for _, p, _ in words) if words else False
+    row_h = CJK_ROW_H if is_cjk else LATIN_ROW_H
+
     pdf = FPDF(format="A4")
     pdf.set_auto_page_break(auto=False)
     _setup_font(pdf, font_path)
-    pdf.set_line_width(0.2)
 
-    for page_num in (1, 2):
+    header_h = 8 + (6 if title else 0) + 3
+    available_h = PAGE_H - 2 * MARGIN - header_h
+    rows_per_col = int(available_h / row_h)
+    words_per_page = rows_per_col * 2
+
+    num_pages = max(1, math.ceil(len(words) / words_per_page)) if words else 1
+    col_x = [MARGIN, MARGIN + COL_W + COL_GAP]
+
+    for page_num in range(1, num_pages + 1):
         pdf.add_page()
-        y = MARGIN
+        y_content = _draw_header(pdf, title, MARGIN)
 
-        y = _draw_header(pdf, page_num, y)
-        y = _draw_table_header(pdf, y)
+        page_words = words[(page_num - 1) * words_per_page: page_num * words_per_page]
+        left_words = page_words[:rows_per_col]
+        right_words = page_words[rows_per_col:]
 
-        start_row = (page_num - 1) * ROWS_PER_PAGE + 1
-        for i in range(ROWS_PER_PAGE):
-            row_num = start_row + i
-            word_idx = row_num - 1
-            if word_idx < len(words):
-                w, p = words[word_idx]
-                _draw_row(pdf, y, row_num, word=w, pinyin=p or None)
-            else:
-                _draw_row(pdf, y, row_num)
-            y += ROW_H
+        if left_words:
+            _draw_column(pdf, col_x[0], y_content, left_words, row_h)
+        if right_words:
+            _draw_column(pdf, col_x[1], y_content, right_words, row_h)
 
-        _draw_footer(pdf, page_num)
-
-    os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
+    out_dir = os.path.dirname(os.path.abspath(output))
+    os.makedirs(out_dir, exist_ok=True)
     pdf.output(output)
     print(f"Saved: {output}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate a vocabulary worksheet PDF")
+    parser = argparse.ArgumentParser(description="Generate a vocabulary reference list PDF")
     parser.add_argument("--output", "-o", required=True, help="Output PDF path")
     parser.add_argument(
         "--words", nargs="*", default=[],
-        help='Pre-populated words as "WORD|PINYIN" pairs (pinyin may be empty)'
+        help='Words as "WORD|PINYIN|TRANSLATION" (use "WORD||TRANSLATION" when no pinyin)'
     )
+    parser.add_argument("--title", default=None, help="Story name shown as subtitle")
     parser.add_argument("--font", default=DEFAULT_FONT, help="Path to TTF font")
     args = parser.parse_args()
 
     words = []
     for entry in args.words:
-        parts = entry.split("|", 1)
+        parts = entry.split("|", 2)
         word = parts[0].strip()
         pinyin = parts[1].strip() if len(parts) > 1 else ""
+        translation = parts[2].strip() if len(parts) > 2 else ""
         if word:
-            words.append((word, pinyin))
+            words.append((word, pinyin, translation))
 
-    generate(args.output, words, font_path=args.font)
+    generate(args.output, words, title=args.title, font_path=args.font)
 
 
 if __name__ == "__main__":

@@ -17,8 +17,8 @@ Derive from user's prompt or conversation context:
   Used in the output filename.
 - **level**: Level folder name (e.g. `HSK2`, `A1`). Used in the output filename.
 - **story_name**: Leaf directory name. Used in the output filename.
-- **word_count**: Number of vocabulary words to pre-populate on the vocabulary
-  sheet. Default: **5**. Accept a different number if the user specifies one.
+- **story_title**: Human-readable title for the vocabulary sheet subtitle. Read
+  from the `# Title` heading in `story.md` or infer from the directory name.
 
 ## Pre-flight checks
 
@@ -35,39 +35,33 @@ it by running the story skill, then stop.
 ### Step 1 — Read the story vocabulary
 
 Read `{story_dir}/story.md`. Locate the vocabulary table (under the
-`## Vocabulary` heading or similar). It has columns: Word | Pinyin/Reading |
-English (exact column names vary by language).
+`## Vocabulary` heading or similar). It has columns:
+- Chinese: Word | Pinyin | English
+- Latin-script languages: Word | English
 
-### Step 2 — Select the top `word_count` words
+Extract **all rows** from the table.
 
-Choose the **`word_count` words a student most needs to know** to understand
-this story. Apply these criteria in order:
+### Step 2 — Build the word list
 
-1. **Story centrality** — words that appear multiple times or carry the core
-   plot/meaning.
-2. **Level-appropriate challenge** — prefer words at or just above the stated
-   level; these are the teachable gap. Skip trivially simple words the student
-   almost certainly already knows.
-3. **Concrete and memorable** — concrete nouns and key verbs over generic
-   connectives.
+Build an entry for every vocabulary word in the form `"WORD|PINYIN|TRANSLATION"`.
 
-For Chinese stories, extract both the Word column and the Pinyin column.
-For Latin-script languages (English, French, Spanish, etc.), set pinyin to an
-empty string.
+- For Chinese: use the Word, Pinyin, and English columns directly.
+- For Latin-script languages (English, French, Spanish, etc.): set pinyin to
+  empty — use the form `"WORD||TRANSLATION"`.
 
-Build a list of exactly `word_count` entries in the form `"WORD|PINYIN"` (or
-`"WORD|"` when there is no romanisation).
+Use pinyin exactly as written in the vocabulary table — do not re-derive it.
 
 ### Step 3 — Generate the vocabulary sheet
 
 ```bash
 venv/bin/python tools/vocab_sheet.py \
   --output temp/vocab_sheet.pdf \
-  --words "W1|P1" "W2|P2" ...
+  --title "{story_title}" \
+  --words "W1|P1|T1" "W2|P2|T2" ...
 ```
 
-Pass all selected words as separate quoted `--words` arguments. If a word has
-no pinyin, pass `"WORD|"`.
+Pass all words as separate quoted `--words` arguments. The sheet is a compact
+reference list (original → translation) in two columns, typically one page.
 
 ### Step 4 — Merge the pack
 
@@ -91,15 +85,12 @@ rm temp/vocab_sheet.pdf
 Report to the user:
 - Full output path
 - Total page count (printed by `pack.py`)
-- The `word_count` vocabulary words selected, with a one-sentence rationale
-  (e.g. "These 5 words carry the core plot and sit at the teachable gap for HSK2.")
 
 ## Notes
 
 - Always use `venv/bin/python` to invoke tools.
 - Merge order is fixed: story → vocabulary sheet → study copy → questions.
-- The vocabulary sheet is always 2 pages (40 rows). Pre-populated rows come
-  first; the rest are blank for the student to fill in during or after reading.
-- Use the pinyin exactly as written in the vocabulary table — do not re-derive it.
+- The vocabulary sheet is a reference list (no blank rows). All story vocabulary
+  is included; it fits on one page for most stories, two pages for very long ones.
 - The `|` separator in `--words` is unambiguous: pipe never appears in hanzi or
   pinyin, so it does not need quoting within the value.

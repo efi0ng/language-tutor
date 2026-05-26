@@ -16,22 +16,34 @@ from pypdf import PdfWriter
 
 
 def merge(story_dir, vocab_pdf, output):
-    parts = [
+    required = [
         os.path.join(story_dir, "story.pdf"),
         vocab_pdf,
         os.path.join(story_dir, "story_study.pdf"),
         os.path.join(story_dir, "questions.pdf"),
     ]
 
-    missing = [p for p in parts if not os.path.exists(p)]
+    missing = [p for p in required if not os.path.exists(p)]
     if missing:
         for p in missing:
             print(f"ERROR: missing file: {p}", file=sys.stderr)
         sys.exit(1)
 
     writer = PdfWriter()
-    for path in parts:
-        writer.append(path)
+    writer.append(os.path.join(story_dir, "story.pdf"))
+    writer.append(vocab_pdf)
+
+    # Ensure the study copy starts on an odd (right-hand) page so it lands on
+    # the front of a new sheet when printing double-sided.
+    if len(writer.pages) % 2 == 1:
+        last = writer.pages[-1]
+        writer.add_blank_page(
+            width=float(last.mediabox.width),
+            height=float(last.mediabox.height),
+        )
+
+    writer.append(os.path.join(story_dir, "story_study.pdf"))
+    writer.append(os.path.join(story_dir, "questions.pdf"))
 
     os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
     with open(output, "wb") as f:
