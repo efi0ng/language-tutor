@@ -19,6 +19,12 @@ Derive from user's prompt or conversation context:
 - **story_name**: Leaf directory name. Used in the output filename.
 - **story_title**: Human-readable title for the vocabulary sheet subtitle. Read
   from the `# Title` heading in `story.md` or infer from the directory name.
+- **native_language**: The student's native/home language — the translation
+  target for the vocabulary sheet (e.g. `Spanish`, `English`). Infer from
+  context: check the student table in CLAUDE.md, the conversation, or the
+  story language (for Chinese stories the learner is efi0ng whose native
+  language is English; for English stories the learner is mulata whose native
+  language is Spanish). Ask the user if genuinely ambiguous.
 
 ## Pre-flight checks
 
@@ -32,24 +38,27 @@ it by running the story skill, then stop.
 
 ## Procedure
 
-### Step 1 — Read the story vocabulary
+### Step 1 — Read the story text
 
-Read `{story_dir}/story.md`. Locate the vocabulary table (under the
-`## Vocabulary` heading or similar). It has columns:
-- Chinese: Word | Pinyin | English
-- Latin-script languages: Word | English
-
-Extract **all rows** from the table.
+Read `{story_dir}/story.md` in full.
 
 ### Step 2 — Build the word list
 
-Build an entry for every vocabulary word in the form `"WORD|PINYIN|TRANSLATION"`.
+Extract 40–60 of the most useful content words from the story body for a learner
+at this level. Skip pure function words (articles, prepositions, auxiliary verbs
+like *is/are/have*) unless they are a specific vocabulary target. Prioritise
+nouns, verbs, adjectives, and adverbs that carry meaning and that the learner is
+likely to encounter again.
 
-- For Chinese: use the Word, Pinyin, and English columns directly.
-- For Latin-script languages (English, French, Spanish, etc.): set pinyin to
-  empty — use the form `"WORD||TRANSLATION"`.
+Translate every word into **{native_language}**.
 
-Use pinyin exactly as written in the vocabulary table — do not re-derive it.
+Build each entry as `"WORD|PINYIN|TRANSLATION"`:
+
+- **Chinese stories**: include pinyin from the story's vocabulary table (or
+  derive it carefully if a word is not listed). Use the form
+  `"汉字|pīnyīn|{native_language translation}"`.
+- **Latin-script stories** (English, French, Spanish, etc.): omit the pinyin
+  field — use the form `"WORD||{native_language translation}"`.
 
 ### Step 3 — Generate the vocabulary sheet
 
@@ -90,7 +99,7 @@ Report to the user:
 
 - Always use `venv/bin/python` to invoke tools.
 - Merge order is fixed: story → vocabulary sheet → study copy → questions.
-- The vocabulary sheet is a reference list (no blank rows). All story vocabulary
-  is included; it fits on one page for most stories, two pages for very long ones.
+- The vocabulary sheet always shows **study language → native language**. Aim
+  for 40–60 words; the two-column layout fits this on one page for most stories.
 - The `|` separator in `--words` is unambiguous: pipe never appears in hanzi or
   pinyin, so it does not need quoting within the value.
